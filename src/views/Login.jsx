@@ -8,11 +8,13 @@ export default function Login() {
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [pendingConfirm, setPendingConfirm] = useState(false);
 
   function reset() {
     setError('');
     setPassword('');
     setConfirm('');
+    setPendingConfirm(false);
   }
 
   function switchMode(m) {
@@ -46,12 +48,18 @@ export default function Login() {
       });
       if (err) setError(mapError(err.message));
     } else {
-      const { error: err } = await supabase.auth.signUp({
+      const { data, error: err } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
       });
-      if (err) setError(mapError(err.message));
-      // Si no hay error, Supabase crea la sesión automáticamente y App.jsx detecta el cambio.
+      if (err) {
+        setError(mapError(err.message));
+      } else if (!data.session) {
+        // Supabase tiene confirmación de email activada:
+        // la cuenta se creó pero hay que confirmar el email antes de entrar.
+        setPendingConfirm(true);
+      }
+      // Si data.session existe, App.jsx detecta el cambio y entra directo.
     }
 
     setLoading(false);
@@ -81,47 +89,66 @@ export default function Login() {
           ))}
         </div>
 
-        <form onSubmit={submit} className="mt-5 space-y-3">
-          <input
-            type="email"
-            className="input-field"
-            placeholder="Email"
-            value={email}
-            autoComplete="email"
-            autoFocus
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <input
-            type="password"
-            className="input-field"
-            placeholder="Contraseña"
-            value={password}
-            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          {mode === 'signup' && (
+        {pendingConfirm ? (
+          <div className="mt-6 card p-5 animate-fade-in">
+            <div className="text-jade text-3xl mb-3">✓</div>
+            <p className="text-neutral-100 font-medium mb-1">Revisá tu email</p>
+            <p className="text-neutral-400 text-sm leading-relaxed">
+              Te mandamos un link de confirmación a{' '}
+              <strong className="text-neutral-200">{email}</strong>.
+              Hacé click ahí y ya podés entrar con tu contraseña.
+            </p>
+            <p className="text-muted text-xs mt-3">Solo se hace una vez.</p>
+            <button
+              className="mt-4 text-sm text-muted"
+              onClick={() => { reset(); setMode('signin'); }}
+            >
+              Ya confirmé, ir a entrar →
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="mt-5 space-y-3">
+            <input
+              type="email"
+              className="input-field"
+              placeholder="Email"
+              value={email}
+              autoComplete="email"
+              autoFocus
+              onChange={(e) => setEmail(e.target.value)}
+            />
             <input
               type="password"
               className="input-field"
-              placeholder="Repetir contraseña"
-              value={confirm}
-              autoComplete="new-password"
-              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="Contraseña"
+              value={password}
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+              onChange={(e) => setPassword(e.target.value)}
             />
-          )}
+            {mode === 'signup' && (
+              <input
+                type="password"
+                className="input-field"
+                placeholder="Repetir contraseña"
+                value={confirm}
+                autoComplete="new-password"
+                onChange={(e) => setConfirm(e.target.value)}
+              />
+            )}
 
-          {error && (
-            <p className="text-red-400 text-sm leading-snug">{error}</p>
-          )}
+            {error && (
+              <p className="text-red-400 text-sm leading-snug">{error}</p>
+            )}
 
-          <button
-            type="submit"
-            className="btn-primary w-full"
-            disabled={!email.trim() || !password || loading}
-          >
-            {loading ? 'Cargando…' : mode === 'signin' ? 'Entrar' : 'Crear cuenta'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              className="btn-primary w-full"
+              disabled={!email.trim() || !password || loading}
+            >
+              {loading ? 'Cargando…' : mode === 'signin' ? 'Entrar' : 'Crear cuenta'}
+            </button>
+          </form>
+        )}
       </div>
 
       <div className="mx-auto w-full max-w-md px-5 pb-6">
