@@ -2,7 +2,7 @@ import Header from '../components/Header.jsx';
 import ProgressBar from '../components/ProgressBar.jsx';
 import { milestone, PHASE_META, BELTS } from '../lib/phases.js';
 
-export default function Dashboard({ state, currentPhase, goTo, onOpenSession }) {
+export default function Dashboard({ state, currentPhase, goTo, onOpenSession, onLogout }) {
   const { profile, sessions } = state;
   const count = profile.totalSessions;
   const ms = milestone(count);
@@ -14,12 +14,21 @@ export default function Dashboard({ state, currentPhase, goTo, onOpenSession }) 
       <Header
         subtitle={`Hola, ${profile.name}`}
         right={
-          <button
-            onClick={() => goTo('history')}
-            className="text-xs text-muted border border-line rounded-lg px-3 py-1.5 active:bg-elevated transition-colors"
-          >
-            Historial
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => goTo('history')}
+              className="text-xs text-muted border border-line rounded-lg px-3 py-1.5 active:bg-elevated transition-colors"
+            >
+              Historial
+            </button>
+            <button
+              onClick={onLogout}
+              className="text-xs text-muted border border-line rounded-lg px-3 py-1.5 active:bg-elevated transition-colors"
+              title="Cerrar sesión"
+            >
+              Salir
+            </button>
+          </div>
         }
       />
 
