@@ -9,6 +9,7 @@ const SESSION_DATA_DEFAULTS = {
   struggles: [],
   wins: [],
   focusNext: [],
+  matQuestion: null,
   styleSignal: null,
   styleHypothesis: null,
   styleConfidence: 0,
@@ -30,6 +31,7 @@ function sanitizeSessionData(raw) {
     struggles: arr(raw.struggles),
     wins: arr(raw.wins),
     focusNext: arr(raw.focusNext),
+    matQuestion: typeof raw.matQuestion === 'string' && raw.matQuestion.trim() ? raw.matQuestion.trim() : null,
     styleSignal: typeof raw.styleSignal === 'string' ? raw.styleSignal : null,
     styleHypothesis: typeof raw.styleHypothesis === 'string' ? raw.styleHypothesis : null,
     styleConfidence: confidence,
@@ -70,6 +72,16 @@ export async function sendChat({ messages, profile, sessionsSummary, currentPhas
     console.warn('Usando guía local (sin backend):', err.message);
     return localGuide({ messages, profile, currentPhase });
   }
+}
+
+// Genera una pregunta de auto-observación para el fallback de dev.
+function buildMatQuestion(userText, prevSessions) {
+  const low = userText.toLowerCase();
+  if (low.includes('espalda')) return 'La próxima, fijate si buscás el control de espalda de forma instintiva o solo cuando te la dan — ¿lo iniciás vos?';
+  if (low.includes('trab') || low.includes('guardia')) return 'Observá cuántas veces te encontrás en la misma posición incómoda — ¿hay un patrón que se repite?';
+  if (low.includes('cómodo') || low.includes('control')) return 'La próxima clase prestá atención a en qué momento del roll te sentís más vos mismo — ¿qué posición es?';
+  if (prevSessions >= 1) return 'Comparando con la última clase, ¿hay alguna situación que se repitió? ¿La manejaste diferente?';
+  return 'La próxima vez fijate si hay alguna posición a la que volvés siempre — ¿la buscás vos o llegás ahí sin querer?';
 }
 
 // Devuelve los tags cuyo patrón aparece en el texto (solo para el fallback de dev).
@@ -120,6 +132,7 @@ function localGuide({ messages, profile, currentPhase }) {
         ['logré', 'concretó posición'],
       ]),
       focusNext: ['recomponer la guardia', 'reconocer tu zona cómoda'],
+      matQuestion: buildMatQuestion(userText, profile.totalSessions || 0),
       styleSignal: null,
       styleHypothesis: null,
       styleConfidence: 0,

@@ -8,7 +8,8 @@ export default function PreClass({ state, onBack }) {
   // Focos: lo recomendado en la última sesión, si no, las trabas a atacar.
   const focos = (d.focusNext?.length ? d.focusNext : d.struggles || []).slice(0, 2);
 
-  // Pregunta para llevar al tatami.
+  // Pregunta para el tatami: prioridad → matQuestion de la última sesión → hipótesis → foco → genérica.
+  const matQuestion = d.matQuestion || null;
   const question = profile.styleHypothesis
     ? `Hoy, ¿se confirma o se contradice esto: "${profile.styleHypothesis}"?`
     : focos[0]
@@ -61,11 +62,26 @@ export default function PreClass({ state, onBack }) {
           </section>
         )}
 
-        {/* Pregunta para el tatami */}
-        <section className="card p-5 border-jade/30 bg-jade/5">
-          <span className="text-xs uppercase tracking-widest text-jade">Llevá esta pregunta</span>
-          <p className="text-lg text-neutral-100 leading-snug mt-2">{question}</p>
-        </section>
+        {/* Micro-tip personalizado de la última sesión (discovery) */}
+        {matQuestion && (
+          <section className="rounded-2xl border border-jade/40 bg-jade/8 p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2D9B6F" strokeWidth="2.5">
+                <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01" strokeLinecap="round"/>
+              </svg>
+              <span className="text-[11px] uppercase tracking-widest text-jade font-medium">Tu pregunta para hoy</span>
+            </div>
+            <p className="text-lg text-neutral-100 leading-snug">{matQuestion}</p>
+          </section>
+        )}
+
+        {/* Pregunta genérica si no hay matQuestion */}
+        {!matQuestion && (
+          <section className="card p-5 border-jade/30 bg-jade/5">
+            <span className="text-xs uppercase tracking-widest text-jade">Llevá esta pregunta</span>
+            <p className="text-lg text-neutral-100 leading-snug mt-2">{question}</p>
+          </section>
+        )}
 
         <p className="text-[11px] text-muted/70 leading-relaxed text-center">
           Estos focos salen de tus propios registros. Cualquier corrección técnica, validala con tu

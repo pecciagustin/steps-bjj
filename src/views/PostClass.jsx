@@ -115,26 +115,41 @@ export default function PostClass({ state, currentPhase, onCommit, onBack }) {
               </button>
             </div>
           ) : (
-            <div className="animate-fade-in">
-              <p className="text-sm text-muted mb-2">¿Cómo terminaste hoy?</p>
-              <div className="grid grid-cols-4 gap-2 mb-4">
-                {MOODS.map((mo) => (
-                  <button
-                    key={mo.key}
-                    onClick={() => setMood(mo.key)}
-                    className={`rounded-xl py-2.5 text-xs font-medium border transition-colors ${
-                      mood === mo.key
-                        ? 'border-jade bg-jade/10 text-neutral-100'
-                        : 'border-line bg-elevated text-neutral-400'
-                    }`}
-                  >
-                    {mo.label}
-                  </button>
-                ))}
+            <div className="animate-fade-in space-y-4">
+              {/* Micro-tip: pregunta para llevar al tatami */}
+              {extracted?.matQuestion && (
+                <div className="rounded-2xl border border-jade/40 bg-jade/8 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2D9B6F" strokeWidth="2.5">
+                      <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01" strokeLinecap="round"/>
+                    </svg>
+                    <span className="text-[11px] uppercase tracking-widest text-jade font-medium">Llevá esto a la próxima clase</span>
+                  </div>
+                  <p className="text-[15px] text-neutral-100 leading-snug">{extracted.matQuestion}</p>
+                </div>
+              )}
+
+              <div>
+                <p className="text-sm text-muted mb-2">¿Cómo terminaste hoy?</p>
+                <div className="grid grid-cols-4 gap-2 mb-3">
+                  {MOODS.map((mo) => (
+                    <button
+                      key={mo.key}
+                      onClick={() => setMood(mo.key)}
+                      className={`rounded-xl py-2.5 text-xs font-medium border transition-colors ${
+                        mood === mo.key
+                          ? 'border-jade bg-jade/10 text-neutral-100'
+                          : 'border-line bg-elevated text-neutral-400'
+                      }`}
+                    >
+                      {mo.label}
+                    </button>
+                  ))}
+                </div>
+                <button className="btn-primary w-full" onClick={save}>
+                  Guardar sesión
+                </button>
               </div>
-              <button className="btn-primary w-full" onClick={save}>
-                Guardar sesión
-              </button>
             </div>
           )}
         </div>
