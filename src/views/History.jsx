@@ -1,44 +1,39 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Header, { BackButton } from '../components/Header.jsx';
-import { PHASE_META } from '../lib/phases.js';
 import RichText from '../components/RichText.jsx';
+import { PHASE_META } from '../lib/phases.js';
+import { sendChat, splitSessionData } from '../lib/api.js';
+import { buildSessionsSummary } from '../lib/phases.js';
 
-const MOODS = [
-  { key: 'great', label: 'Genial' },
-  { key: 'normal', label: 'Normal' },
-  { key: 'tired', label: 'Cansado' },
-  { key: 'bad', label: 'Mal' },
-];
-
-export default function History({ state, initialSession, onBack, onDelete, onEdit }) {
+export default function History({ state, initialSession, onBack, onDelete, onUpdate }) {
   const { sessions } = state;
   const ordered = [...sessions].reverse();
   const [open, setOpen] = useState(initialSession || null);
-  const [editing, setEditing] = useState(false);
+  const [continuing, setContinuing] = useState(false);
 
   function handleDelete(sessionId) {
     onDelete(sessionId);
     setOpen(null);
-    setEditing(false);
   }
 
   function handleSave(sessionId, updates) {
-    onEdit(sessionId, updates);
-    // Actualizar la sesión abierta con los cambios para que se vea en detalle.
+    onUpdate(sessionId, updates);
+    // Reflejar los cambios en la sesión abierta localmente.
     setOpen((prev) => ({
       ...prev,
-      date: updates.date ?? prev.date,
-      extractedData: { ...prev.extractedData, ...updates.extractedData },
+      conversation: updates.conversation,
+      extractedData: updates.extractedData ?? prev.extractedData,
     }));
-    setEditing(false);
+    setContinuing(false);
   }
 
-  if (open && editing) {
+  if (open && continuing) {
     return (
-      <EditSession
+      <ContinueChat
         session={open}
+        state={state}
         onSave={(updates) => handleSave(open.id, updates)}
-        onCancel={() => setEditing(false)}
+        onCancel={() => setContinuing(false)}
       />
     );
   }
@@ -47,8 +42,8 @@ export default function History({ state, initialSession, onBack, onDelete, onEdi
     return (
       <SessionDetail
         session={open}
-        onBack={() => { setOpen(null); setEditing(false); }}
-        onEdit={() => setEditing(true)}
+        onBack={() => setOpen(null)}
+        onContinue={() => setContinuing(true)}
         onDelete={() => handleDelete(open.id)}
       />
     );
@@ -103,11 +98,12 @@ export default function History({ state, initialSession, onBack, onDelete, onEdi
   );
 }
 
-// --- Vista de detalle ---
+// --- Detalle de sesión ---
 
-function SessionDetail({ session, onBack, onEdit, onDelete }) {
+function SessionDetail({ session, onBack, onContinue, onDelete }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const d = session.extractedData || {};
+
   const groups = [
     ['Técnicas', d.techniques],
     ['Trabas', d.struggles],
@@ -122,10 +118,10 @@ function SessionDetail({ session, onBack, onEdit, onDelete }) {
         subtitle={`Sesión ${session.sessionNumber}`}
         right={
           <button
-            onClick={onEdit}
+            onClick={onContinue}
             className="text-xs text-muted border border-line rounded-lg px-3 py-1.5 active:bg-elevated transition-colors"
           >
-            Editar
+            + Agregar
           </button>
         }
       />
@@ -166,23 +162,11 @@ function SessionDetail({ session, onBack, onEdit, onDelete }) {
 
         <h2 className="text-sm text-muted mb-3">Conversación</h2>
         <div className="space-y-3 mb-8">
-          {session.conversation.map((m, i) => {
-            const isUser = m.role === 'user';
-            return (
-              <div key={i} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ${
-                  isUser
-                    ? 'bg-jade text-black rounded-br-md'
-                    : 'bg-surface border border-line text-neutral-200 rounded-bl-md'
-                }`}>
-                  <RichText text={m.content} />
-                </div>
-              </div>
-            );
-          })}
+          {session.conversation.map((m, i) => (
+            <Bubble key={i} role={m.role} text={m.content} />
+          ))}
         </div>
 
-        {/* Borrar sesión */}
         {!confirmDelete ? (
           <button
             onClick={() => setConfirmDelete(true)}
@@ -216,144 +200,159 @@ function SessionDetail({ session, onBack, onEdit, onDelete }) {
   );
 }
 
-// --- Vista de edición ---
+// --- Modo continuar chat ---
 
-function EditSession({ session, onSave, onCancel }) {
-  const d = session.extractedData || {};
-  const [date, setDate] = useState(session.date);
-  const [mood, setMood] = useState(d.mood || 'normal');
-  const [techniques, setTechniques] = useState(d.techniques || []);
-  const [struggles, setStruggles] = useState(d.struggles || []);
-  const [wins, setWins] = useState(d.wins || []);
-  const [focusNext, setFocusNext] = useState(d.focusNext || []);
-  const [matQuestion, setMatQuestion] = useState(d.matQuestion || '');
+function ContinueChat({ session, state, onSave, onCancel }) {
+  const { profile, sessions } = state;
+  const [messages, setMessages] = useState(session.conversation || []);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [newExtracted, setNewExtracted] = useState(null);
+  const endRef = useRef(null);
 
-  function save() {
-    onSave({
-      date,
-      extractedData: { mood, techniques, struggles, wins, focusNext, matQuestion: matQuestion.trim() || null },
+  const currentPhase = session.phase || 'discovery';
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
+
+  async function send() {
+    const text = input.trim();
+    if (!text || loading) return;
+    const next = [...messages, { role: 'user', content: text }];
+    setMessages(next);
+    setInput('');
+    setLoading(true);
+
+    const raw = await sendChat({
+      messages: next,
+      profile,
+      sessionsSummary: buildSessionsSummary(sessions),
+      currentPhase,
     });
+
+    const { visible, extracted } = splitSessionData(raw);
+    setMessages((m) => [...m, { role: 'assistant', content: visible }]);
+    setLoading(false);
+    if (extracted) setNewExtracted(extracted);
   }
 
+  function save() {
+    onSave({ conversation: messages, extractedData: newExtracted });
+  }
+
+  function saveConversationOnly() {
+    onSave({ conversation: messages, extractedData: null });
+  }
+
+  const canSave = messages.length > (session.conversation || []).length;
+
   return (
-    <div className="min-h-dvh">
+    <div className="flex flex-col h-dvh">
       <Header
         left={<BackButton onClick={onCancel} />}
-        subtitle={`Editando sesión ${session.sessionNumber}`}
-        right={
-          <button onClick={save} className="text-sm font-semibold text-jade px-3 py-1.5 active:opacity-70 transition-opacity">
-            Guardar
-          </button>
-        }
+        subtitle={`Sesión ${session.sessionNumber} — agregando`}
       />
-      <main className="mx-auto max-w-md px-5 py-6 animate-fade-in space-y-6">
-        {/* Fecha */}
-        <div>
-          <label className="block text-xs text-muted mb-2">Fecha</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="input-field"
-            style={{ colorScheme: 'dark' }}
-          />
-        </div>
 
-        {/* Ánimo */}
-        <div>
-          <label className="block text-xs text-muted mb-2">Ánimo</label>
-          <div className="grid grid-cols-4 gap-2">
-            {MOODS.map((mo) => (
-              <button
-                key={mo.key}
-                onClick={() => setMood(mo.key)}
-                className={`rounded-xl py-2.5 text-xs font-medium border transition-colors ${
-                  mood === mo.key
-                    ? 'border-jade bg-jade/10 text-neutral-100'
-                    : 'border-line bg-elevated text-neutral-400'
-                }`}
-              >
-                {mo.label}
+      <div className="flex-1 overflow-y-auto no-scrollbar">
+        <div className="mx-auto max-w-md px-5 py-5 space-y-4">
+          {/* Conversación original (tenue) */}
+          {session.conversation.map((m, i) => (
+            <Bubble key={`orig-${i}`} role={m.role} text={m.content} dim />
+          ))}
+
+          {/* Separador */}
+          {session.conversation.length > 0 && (
+            <div className="flex items-center gap-3 py-1">
+              <div className="flex-1 h-px bg-line" />
+              <span className="text-[11px] text-muted">agregando ahora</span>
+              <div className="flex-1 h-px bg-line" />
+            </div>
+          )}
+
+          {/* Mensajes nuevos (normales) */}
+          {messages.slice(session.conversation.length).map((m, i) => (
+            <Bubble key={`new-${i}`} role={m.role} text={m.content} />
+          ))}
+
+          {loading && <Typing />}
+          <div ref={endRef} />
+        </div>
+      </div>
+
+      <div className="border-t border-line bg-ink">
+        <div className="mx-auto max-w-md px-5 py-4 space-y-3">
+          {newExtracted ? (
+            <div className="animate-fade-in space-y-2">
+              <p className="text-xs text-muted text-center">La app actualizó el resumen de la sesión.</p>
+              <button className="btn-primary w-full" onClick={save}>
+                Guardar cambios
               </button>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-end gap-2">
+                <textarea
+                  className="input-field resize-none max-h-32 py-3"
+                  rows={1}
+                  placeholder="Escribí lo que olvidaste…"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+                  }}
+                />
+                <button
+                  className="btn-primary px-4 py-3 shrink-0"
+                  disabled={!input.trim() || loading}
+                  onClick={send}
+                  aria-label="Enviar"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
+              {canSave && (
+                <button
+                  onClick={saveConversationOnly}
+                  className="w-full py-2.5 text-sm text-muted border border-line rounded-xl active:bg-elevated transition-colors"
+                >
+                  Guardar sin cerrar la conversación
+                </button>
+              )}
+            </>
+          )}
         </div>
-
-        <TagEditor label="Técnicas trabajadas" tags={techniques} onChange={setTechniques} />
-        <TagEditor label="Trabas" tags={struggles} onChange={setStruggles} />
-        <TagEditor label="Logros" tags={wins} onChange={setWins} />
-        <TagEditor label="Focos para la próxima" tags={focusNext} onChange={setFocusNext} />
-
-        {/* Pregunta del tatami */}
-        <div>
-          <label className="block text-xs text-muted mb-2">Pregunta para el tatami</label>
-          <textarea
-            className="input-field resize-none"
-            rows={3}
-            placeholder="Pregunta de auto-observación…"
-            value={matQuestion}
-            onChange={(e) => setMatQuestion(e.target.value)}
-          />
-        </div>
-
-        <button onClick={save} className="btn-primary w-full">
-          Guardar cambios
-        </button>
-      </main>
+      </div>
     </div>
   );
 }
 
-// --- Editor de tags (chips) ---
-
-function TagEditor({ label, tags, onChange }) {
-  const [input, setInput] = useState('');
-
-  function add() {
-    const v = input.trim();
-    if (!v || tags.includes(v)) return;
-    onChange([...tags, v]);
-    setInput('');
-  }
-
-  function remove(tag) {
-    onChange(tags.filter((t) => t !== tag));
-  }
-
+function Bubble({ role, text, dim }) {
+  const isUser = role === 'user';
   return (
-    <div>
-      <label className="block text-xs text-muted mb-2">{label}</label>
-      <div className="flex flex-wrap gap-1.5 mb-2">
-        {tags.map((t) => (
-          <span key={t} className="flex items-center gap-1 text-[13px] bg-elevated border border-line rounded-full pl-2.5 pr-1.5 py-1 text-neutral-300">
-            {t}
-            <button
-              onClick={() => remove(t)}
-              className="w-4 h-4 flex items-center justify-center rounded-full text-muted hover:text-neutral-200 transition-colors"
-              aria-label={`Eliminar ${t}`}
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round"/>
-              </svg>
-            </button>
-          </span>
-        ))}
+    <div className={`flex animate-fade-in-fast ${isUser ? 'justify-end' : 'justify-start'} ${dim ? 'opacity-40' : ''}`}>
+      <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ${
+        isUser
+          ? 'bg-jade text-black rounded-br-md'
+          : 'bg-surface border border-line text-neutral-200 rounded-bl-md'
+      }`}>
+        <RichText text={text} />
       </div>
-      <div className="flex gap-2">
-        <input
-          className="input-field flex-1 py-2.5 text-sm"
-          placeholder="Agregar…"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
-        />
-        <button
-          onClick={add}
-          disabled={!input.trim()}
-          className="px-3 py-2.5 text-sm font-medium text-jade border border-jade/40 rounded-xl disabled:opacity-30 active:bg-jade/10 transition-colors"
-        >
-          +
-        </button>
+    </div>
+  );
+}
+
+function Typing() {
+  return (
+    <div className="flex justify-start animate-fade-in-fast">
+      <div className="bg-surface border border-line rounded-2xl rounded-bl-md px-4 py-3">
+        <div className="flex gap-1">
+          <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce [animation-delay:-0.3s]" />
+          <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce [animation-delay:-0.15s]" />
+          <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce" />
+        </div>
       </div>
     </div>
   );

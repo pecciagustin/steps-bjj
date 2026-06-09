@@ -126,12 +126,12 @@ export default function App() {
     });
   }
 
-  function editSession(sessionId, updates) {
+  function updateSession(sessionId, { conversation, extractedData }) {
     setState((prev) => ({
       ...prev,
       sessions: prev.sessions.map((s) =>
         s.id === sessionId
-          ? { ...s, date: updates.date ?? s.date, extractedData: { ...s.extractedData, ...updates.extractedData } }
+          ? { ...s, conversation, extractedData: extractedData ?? s.extractedData }
           : s
       ),
     }));
@@ -158,7 +158,7 @@ export default function App() {
           initialSession={activeSession}
           onBack={() => setView('dashboard')}
           onDelete={deleteSession}
-          onEdit={editSession}
+          onUpdate={updateSession}
         />
       )}
     </div>
