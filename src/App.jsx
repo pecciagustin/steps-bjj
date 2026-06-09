@@ -115,6 +115,28 @@ export default function App() {
     setView('dashboard');
   }
 
+  function deleteSession(sessionId) {
+    setState((prev) => {
+      const sessions = prev.sessions.filter((s) => s.id !== sessionId);
+      return {
+        ...prev,
+        sessions,
+        profile: { ...prev.profile, totalSessions: sessions.length },
+      };
+    });
+  }
+
+  function editSession(sessionId, updates) {
+    setState((prev) => ({
+      ...prev,
+      sessions: prev.sessions.map((s) =>
+        s.id === sessionId
+          ? { ...s, date: updates.date ?? s.date, extractedData: { ...s.extractedData, ...updates.extractedData } }
+          : s
+      ),
+    }));
+  }
+
   const common = { state, setState, currentPhase, goTo: setView };
 
   return (
@@ -131,7 +153,13 @@ export default function App() {
       )}
       {view === 'pre' && <PreClass {...common} onBack={() => setView('dashboard')} />}
       {view === 'history' && (
-        <History {...common} initialSession={activeSession} onBack={() => setView('dashboard')} />
+        <History
+          {...common}
+          initialSession={activeSession}
+          onBack={() => setView('dashboard')}
+          onDelete={deleteSession}
+          onEdit={editSession}
+        />
       )}
     </div>
   );
