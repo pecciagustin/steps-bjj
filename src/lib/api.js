@@ -102,9 +102,13 @@ function localGuide({ messages, profile, currentPhase }) {
 
   // Cierre: a partir del 3er intercambio del usuario.
   if (turn >= 3) {
+    const prevSessions = profile.totalSessions || 0;
+    const earlyTip = prevSessions >= 1
+      ? `\n\nEstos consejos solo van a mejorar a medida que me contés más, pero por lo que me dijiste hasta acá: parece que te sentís más cómodo cuando lográs imponer tu posición desde arriba — la próxima clase fijate si buscás eso de forma instintiva o si llegás ahí por casualidad.`
+      : '';
     const closing =
       currentPhase === 'discovery'
-        ? `Buenísimo, ${name}. Me llevo una imagen más clara de cómo te movés hoy.\n\n**Insight:** estás generando datos sobre tu juego cada vez que rolás — eso es lo que importa ahora.\n\n**Focos para la próxima:**\n1. Prestá atención a en qué posición te sentís más cómodo sin pensarlo.\n2. Anotá una situación donde te trabaste.\n\nValidá cualquier corrección técnica con tu profe. Sesión ${n} de 5 registrada. Seguí contándome.`
+        ? `Buenísimo, ${name}. Me llevo una imagen más clara de cómo te movés hoy.\n\n**Insight:** ${prevSessions >= 1 ? 'ya empiezo a ver algunos patrones en cómo describís tu juego — eso es exactamente lo que necesito para ayudarte mejor.' : 'estás generando datos sobre tu juego cada vez que rolás — eso es lo que importa ahora.'}${earlyTip}\n\n**Focos para la próxima:**\n1. Prestá atención a en qué posición te sentís más cómodo sin pensarlo.\n2. Anotá una situación donde te trabaste.\n\nValidá cualquier corrección técnica con tu profe. Sesión ${n} de 5 registrada. Seguí contándome.`
         : `Gracias por el detalle, ${name}.\n\n**Insight:** empiezo a ver algo en vos — un patrón que se repite en cómo encarás los rolls.\n\n**Focos para la próxima:**\n1. Probá llevar conscientemente el roll a tu zona cómoda.\n2. Registrá si lo lográs o no.\n\nNada de esto reemplaza a tu profe. ¡A entrenar!`;
     // En dev no hay extracción real del modelo: derivamos tags simples de lo que escribió el usuario.
     const userText = messages

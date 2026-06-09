@@ -24,8 +24,20 @@ Ejemplos del tono correcto:
 Poné la pregunta en el campo matQuestion del bloque session_data. Una sola oración. Sin asteriscos.`
     : '';
 
+  const earlyTipInstruction = hasPreviousSessions ? `
+PRIMER TIP ACCIONABLE (OBLIGATORIO desde sesión 2):
+Al cerrar esta sesión, después del insight, incluí una sección con este formato exacto:
+
+"Estos consejos solo van a mejorar a medida que me contés más, pero por lo que me dijiste hasta acá: [UNA observación concreta sobre su juego] — la próxima clase probá [UNA acción muy específica y accionable]."
+
+Reglas para este tip:
+- Tiene que surgir de un patrón REAL que ya aparece en el historial o en lo que contó hoy.
+- La acción tiene que ser ultra concreta: no "prestá atención a tu guardia" sino "la próxima vez que te pasen la guardia, fijate si tu reacción instintiva es recuperar o pasar a otra posición".
+- No des correcciones técnicas — hablás de PATRONES de comportamiento, no de mecánica.
+- Máximo 2 oraciones. Sin asteriscos.` : '';
+
   const phaseInstructions = {
-    discovery: `Fase DESCUBRIMIENTO (sesiones 1-5). Todavía NO tenés una hipótesis de estilo. Hacé preguntas abiertas sobre técnica y personalidad en el tatami: qué posiciones busca, dónde se traba, cómo se siente rolando. NO des consejos técnicos todavía — estás observando. Esta es la sesión número ${sessionNumber}.${hasPreviousSessions ? ` Tenés ${profile.totalSessions} sesión/es previas en el historial — usalas para detectar patrones que se repiten.` : ''} Cuando cierres la conversación, terminá tu mensaje con la frase exacta: "Sesión ${sessionNumber} de 5 registrada. Seguí contándome."`,
+    discovery: `Fase DESCUBRIMIENTO (sesiones 1-5). Hacé preguntas abiertas sobre técnica y personalidad: qué posiciones busca, dónde se traba, cómo se siente rolando. Esta es la sesión número ${sessionNumber}.${hasPreviousSessions ? ` Tenés ${profile.totalSessions} sesión/es previas — usá esos datos para detectar patrones que se repiten y construir el primer tip accionable.` : ' Es la primera sesión — solo observá, no des tips todavía.'} Cuando cierres, terminá con la frase exacta: "Sesión ${sessionNumber} de 5 registrada. Seguí contándome."`,
     hypothesis: `Fase HIPÓTESIS (sesiones 6-14). Empezá a compartir patrones que observás, SIEMPRE como hipótesis tentativa, nunca como verdad cerrada. Usá frases como "empiezo a ver algo en vos...". Seguí preguntando para confirmar o descartar. Ejes a considerar: guardia vs top, finisher vs posicional, reactivo vs iniciador.`,
     refinement: `Fase REFINAMIENTO (sesión 15+). El perfil está consolidado pero NUNCA cerrado. Si algo de lo que cuenta hoy contradice la hipótesis anterior, mencionalo explícitamente y ajustá. Confirmá o desafiá la hipótesis con lo nuevo.`,
   };
@@ -45,6 +57,7 @@ ${sessionsSummary || 'Sin sesiones previas — esta es la primera.'}
 
 INSTRUCCIONES DE FASE:
 ${phaseInstructions[currentPhase] || phaseInstructions.discovery}
+${earlyTipInstruction}
 ${matQuestionInstruction}
 
 REGLAS DE CONVERSACIÓN:
