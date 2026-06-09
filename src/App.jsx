@@ -4,43 +4,48 @@ import { loadState, saveState, emptyState } from './lib/storage.js';
 import { loadFromCloud, saveToCloud } from './lib/sync.js';
 import { phaseForSessionCount } from './lib/phases.js';
 import Login from './views/Login.jsx';
+import ResetPassword from './views/ResetPassword.jsx';
 import Onboarding from './views/Onboarding.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import PostClass from './views/PostClass.jsx';
 import PreClass from './views/PreClass.jsx';
 import History from './views/History.jsx';
+import Account from './views/Account.jsx';
+import Admin from './views/Admin.jsx';
 
 const SAVE_DEBOUNCE_MS = 1500;
+const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || '';
 
 export default function App() {
-  const [authUser, setAuthUser] = useState(undefined); // undefined = cargando
+  const [authUser, setAuthUser] = useState(undefined);
   const [state, setState] = useState(null);
   const [view, setView] = useState('dashboard');
   const [activeSession, setActiveSession] = useState(null);
+  const [isRecovery, setIsRecovery] = useState(false);
   const saveTimer = useRef(null);
 
-  // --- Auth: escuchar sesión de Supabase ---
+  // --- Auth ---
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setAuthUser(session?.user ?? null);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setIsRecovery(true);
+      else setIsRecovery(false);
       setAuthUser(session?.user ?? null);
     });
     return () => subscription.unsubscribe();
   }, []);
 
-  // --- Cargar datos cuando hay usuario autenticado ---
+  // --- Cargar datos del usuario ---
   useEffect(() => {
     if (!authUser) return;
     (async () => {
       const cloud = await loadFromCloud(authUser.id);
       if (cloud?.profile?.name) {
-        // Nube tiene datos → úsalos y actualiza el cache local.
         setState(cloud);
         saveState(cloud);
       } else {
-        // Nube vacía → migrar localStorage si existe, si no empezar de cero.
         const local = loadState();
         if (local?.profile?.name) {
           setState(local);
@@ -52,18 +57,16 @@ export default function App() {
     })();
   }, [authUser]);
 
-  // --- Persistir cambios: localStorage inmediato + nube debounced ---
+  // --- Sync ---
   useEffect(() => {
     if (!state || !authUser) return;
     saveState(state);
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      saveToCloud(authUser.id, state);
-    }, SAVE_DEBOUNCE_MS);
+    saveTimer.current = setTimeout(() => saveToCloud(authUser.id, state), SAVE_DEBOUNCE_MS);
     return () => clearTimeout(saveTimer.current);
   }, [state, authUser]);
 
-  // Pantalla de carga mientras resolvemos la sesión.
+  // Cargando
   if (authUser === undefined || (authUser && !state)) {
     return (
       <div className="min-h-dvh bg-ink flex items-center justify-center">
@@ -72,10 +75,13 @@ export default function App() {
     );
   }
 
-  // Sin sesión → login.
+  // Reset de contraseña (viene desde el link del email)
+  if (isRecovery) {
+    return <ResetPassword onDone={() => setIsRecovery(false)} />;
+  }
+
   if (!authUser) return <Login />;
 
-  // Sin perfil → onboarding.
   if (!state.profile?.name) {
     return (
       <Onboarding
@@ -89,6 +95,7 @@ export default function App() {
   }
 
   const currentPhase = phaseForSessionCount(state.profile.totalSessions);
+  const isAdmin = ADMIN_EMAIL && authUser.email === ADMIN_EMAIL;
 
   function commitSession({ conversation, extractedData, styleUpdate }) {
     setState((prev) => {
@@ -118,11 +125,7 @@ export default function App() {
   function deleteSession(sessionId) {
     setState((prev) => {
       const sessions = prev.sessions.filter((s) => s.id !== sessionId);
-      return {
-        ...prev,
-        sessions,
-        profile: { ...prev.profile, totalSessions: sessions.length },
-      };
+      return { ...prev, sessions, profile: { ...prev.profile, totalSessions: sessions.length } };
     });
   }
 
@@ -144,6 +147,7 @@ export default function App() {
       {view === 'dashboard' && (
         <Dashboard
           {...common}
+          isAdmin={isAdmin}
           onOpenSession={(s) => { setActiveSession(s); setView('history'); }}
           onLogout={() => supabase.auth.signOut()}
         />
@@ -160,6 +164,17 @@ export default function App() {
           onDelete={deleteSession}
           onUpdate={updateSession}
         />
+      )}
+      {view === 'account' && (
+        <Account
+          state={state}
+          setState={setState}
+          authUser={authUser}
+          onBack={() => setView('dashboard')}
+        />
+      )}
+      {view === 'admin' && isAdmin && (
+        <Admin onBack={() => setView('dashboard')} />
       )}
     </div>
   );

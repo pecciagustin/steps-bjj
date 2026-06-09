@@ -2,7 +2,7 @@ import Header from '../components/Header.jsx';
 import ProgressBar from '../components/ProgressBar.jsx';
 import { milestone, PHASE_META, BELTS } from '../lib/phases.js';
 
-export default function Dashboard({ state, currentPhase, goTo, onOpenSession, onLogout }) {
+export default function Dashboard({ state, currentPhase, goTo, onOpenSession, onLogout, isAdmin }) {
   const { profile, sessions } = state;
   const count = profile.totalSessions;
   const ms = milestone(count);
@@ -15,17 +15,23 @@ export default function Dashboard({ state, currentPhase, goTo, onOpenSession, on
         subtitle={`Hola, ${profile.name}`}
         right={
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => goTo('history')}
-              className="text-xs text-muted border border-line rounded-lg px-3 py-1.5 active:bg-elevated transition-colors"
-            >
+            <button onClick={() => goTo('history')}
+              className="text-xs text-muted border border-line rounded-lg px-3 py-1.5 active:bg-elevated transition-colors">
               Historial
             </button>
-            <button
-              onClick={onLogout}
+            <button onClick={() => goTo('account')}
               className="text-xs text-muted border border-line rounded-lg px-3 py-1.5 active:bg-elevated transition-colors"
-              title="Cerrar sesión"
-            >
+              title="Mi cuenta">
+              Cuenta
+            </button>
+            {isAdmin && (
+              <button onClick={() => goTo('admin')}
+                className="text-xs text-jade border border-jade/30 rounded-lg px-3 py-1.5 active:bg-jade/10 transition-colors">
+                Admin
+              </button>
+            )}
+            <button onClick={onLogout}
+              className="text-xs text-muted border border-line rounded-lg px-3 py-1.5 active:bg-elevated transition-colors">
               Salir
             </button>
           </div>

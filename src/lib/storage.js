@@ -5,7 +5,9 @@ const KEY = 'steps_bjj';
 export const emptyState = () => ({
   profile: {
     name: '',
+    lastName: '',
     belt: 'white',
+    academy: '',
     startDate: '',
     motivation: '',
     totalSessions: 0,
