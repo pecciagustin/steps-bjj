@@ -2,26 +2,59 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase.js';
 
 export default function Login() {
+  const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
   const [email, setEmail] = useState('');
-  const [sent, setSent] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function send(e) {
-    e.preventDefault();
-    if (!email.trim()) return;
-    setLoading(true);
+  function reset() {
     setError('');
-    const { error: err } = await supabase.auth.signInWithOtp({
-      email: email.trim().toLowerCase(),
-      options: { emailRedirectTo: window.location.origin },
-    });
-    setLoading(false);
-    if (err) {
-      setError('No se pudo enviar el link. Revisá el email e intentá de nuevo.');
-    } else {
-      setSent(true);
+    setPassword('');
+    setConfirm('');
+  }
+
+  function switchMode(m) {
+    reset();
+    setMode(m);
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    setError('');
+
+    if (!email.trim() || !password) return;
+
+    if (mode === 'signup') {
+      if (password.length < 6) {
+        setError('La contraseña tiene que tener al menos 6 caracteres.');
+        return;
+      }
+      if (password !== confirm) {
+        setError('Las contraseñas no coinciden.');
+        return;
+      }
     }
+
+    setLoading(true);
+
+    if (mode === 'signin') {
+      const { error: err } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      if (err) setError(mapError(err.message));
+    } else {
+      const { error: err } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      if (err) setError(mapError(err.message));
+      // Si no hay error, Supabase crea la sesión automáticamente y App.jsx detecta el cambio.
+    }
+
+    setLoading(false);
   }
 
   return (
@@ -31,46 +64,64 @@ export default function Login() {
           STEPS <span className="text-jade">BJJ</span>
         </span>
 
-        {!sent ? (
-          <>
-            <p className="mt-6 text-neutral-300 leading-relaxed">
-              Ingresá tu email para acceder desde cualquier dispositivo. Te mandamos un link — sin contraseña.
-            </p>
-            <form onSubmit={send} className="mt-8 space-y-3">
-              <input
-                type="email"
-                className="input-field"
-                placeholder="tu@email.com"
-                value={email}
-                autoFocus
-                autoComplete="email"
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              {error && <p className="text-red-400 text-sm">{error}</p>}
-              <button
-                type="submit"
-                className="btn-primary w-full"
-                disabled={!email.trim() || loading}
-              >
-                {loading ? 'Enviando…' : 'Enviar link de acceso'}
-              </button>
-            </form>
-          </>
-        ) : (
-          <div className="mt-8 card p-5 animate-fade-in">
-            <div className="text-jade text-3xl mb-3">✓</div>
-            <p className="text-neutral-100 font-medium mb-1">Revisá tu email</p>
-            <p className="text-neutral-400 text-sm leading-relaxed">
-              Mandamos un link a <strong className="text-neutral-200">{email}</strong>. Hacé click ahí y vas a entrar directamente — funciona en cualquier dispositivo.
-            </p>
+        {/* Tabs */}
+        <div className="flex mt-8 bg-elevated rounded-xl p-1">
+          {[['signin', 'Entrar'], ['signup', 'Crear cuenta']].map(([m, label]) => (
             <button
-              className="mt-5 text-sm text-muted"
-              onClick={() => { setSent(false); setEmail(''); }}
+              key={m}
+              onClick={() => switchMode(m)}
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
+                mode === m
+                  ? 'bg-surface text-neutral-100 shadow-sm'
+                  : 'text-muted'
+              }`}
             >
-              Usar otro email
+              {label}
             </button>
-          </div>
-        )}
+          ))}
+        </div>
+
+        <form onSubmit={submit} className="mt-5 space-y-3">
+          <input
+            type="email"
+            className="input-field"
+            placeholder="Email"
+            value={email}
+            autoComplete="email"
+            autoFocus
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <input
+            type="password"
+            className="input-field"
+            placeholder="Contraseña"
+            value={password}
+            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          {mode === 'signup' && (
+            <input
+              type="password"
+              className="input-field"
+              placeholder="Repetir contraseña"
+              value={confirm}
+              autoComplete="new-password"
+              onChange={(e) => setConfirm(e.target.value)}
+            />
+          )}
+
+          {error && (
+            <p className="text-red-400 text-sm leading-snug">{error}</p>
+          )}
+
+          <button
+            type="submit"
+            className="btn-primary w-full"
+            disabled={!email.trim() || !password || loading}
+          >
+            {loading ? 'Cargando…' : mode === 'signin' ? 'Entrar' : 'Crear cuenta'}
+          </button>
+        </form>
       </div>
 
       <div className="mx-auto w-full max-w-md px-5 pb-6">
@@ -80,4 +131,12 @@ export default function Login() {
       </div>
     </div>
   );
+}
+
+function mapError(msg) {
+  if (msg.includes('Invalid login credentials')) return 'Email o contraseña incorrectos.';
+  if (msg.includes('Email not confirmed')) return 'Confirmá tu email antes de entrar.';
+  if (msg.includes('User already registered')) return 'Ya existe una cuenta con ese email. Entrá con tu contraseña.';
+  if (msg.includes('Password should be')) return 'La contraseña tiene que tener al menos 6 caracteres.';
+  return 'Algo salió mal. Intentá de nuevo.';
 }
