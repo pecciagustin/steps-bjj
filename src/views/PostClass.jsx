@@ -18,11 +18,13 @@ export default function PostClass({ state, currentPhase, onCommit, onBack }) {
   const [messages, setMessages] = useState([{ role: 'assistant', content: opening }]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [closed, setClosed] = useState(false);
+  const [closing, setClosing] = useState(false); // esperando el cierre de la IA
   const [extracted, setExtracted] = useState(null);
   const [mood, setMood] = useState('normal');
-  const scrollRef = useRef(null);
   const endRef = useRef(null);
+
+  const hasUserMessages = messages.some((m) => m.role === 'user');
+  const isClosed = !!extracted; // la IA ya mandó el session_data
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -30,7 +32,7 @@ export default function PostClass({ state, currentPhase, onCommit, onBack }) {
 
   async function send() {
     const text = input.trim();
-    if (!text || loading || closed) return;
+    if (!text || loading || closing) return;
     const next = [...messages, { role: 'user', content: text }];
     setMessages(next);
     setInput('');
@@ -41,16 +43,36 @@ export default function PostClass({ state, currentPhase, onCommit, onBack }) {
       profile,
       sessionsSummary: buildSessionsSummary(sessions),
       currentPhase,
+      isClosing: false,
     });
 
     const { visible, extracted: data } = splitSessionData(raw);
     setMessages((m) => [...m, { role: 'assistant', content: visible }]);
     setLoading(false);
 
-    if (data) {
-      setExtracted(data);
-      setClosed(true);
-    }
+    // Si el modelo cerró solo (no debería pasar pero por si acaso)
+    if (data) setExtracted(data);
+  }
+
+  async function triggerClose() {
+    if (loading || closing) return;
+    setClosing(true);
+    setLoading(true);
+
+    // Mandamos el historial completo con isClosing: true — la IA genera el resumen
+    const raw = await sendChat({
+      messages,
+      profile,
+      sessionsSummary: buildSessionsSummary(sessions),
+      currentPhase,
+      isClosing: true,
+    });
+
+    const { visible, extracted: data } = splitSessionData(raw);
+    setMessages((m) => [...m, { role: 'assistant', content: visible }]);
+    setLoading(false);
+    if (data) setExtracted(data);
+    else setClosing(false); // si falla, deja volver a intentar
   }
 
   function save() {
@@ -75,7 +97,7 @@ export default function PostClass({ state, currentPhase, onCommit, onBack }) {
     <div className="flex flex-col h-dvh">
       <Header left={<BackButton onClick={onBack} />} subtitle="Registrar clase" />
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar">
+      <div className="flex-1 overflow-y-auto no-scrollbar">
         <div className="mx-auto max-w-md px-5 py-5 space-y-4">
           {messages.map((m, i) => (
             <Bubble key={i} role={m.role} text={m.content} />
@@ -85,73 +107,65 @@ export default function PostClass({ state, currentPhase, onCommit, onBack }) {
         </div>
       </div>
 
-      {/* Pie: chat o cierre */}
+      {/* Pie */}
       <div className="border-t border-line bg-ink">
-        <div className="mx-auto max-w-md px-5 py-4">
-          {!closed ? (
-            <div className="flex items-end gap-2">
-              <textarea
-                className="input-field resize-none max-h-32 py-3"
-                rows={1}
-                placeholder="Escribí tu respuesta…"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    send();
-                  }
-                }}
-              />
-              <button
-                className="btn-primary px-4 py-3 shrink-0"
-                disabled={!input.trim() || loading}
-                onClick={send}
-                aria-label="Enviar"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+        <div className="mx-auto max-w-md px-5 py-4 space-y-3">
+
+          {isClosed ? (
+            /* Sesión cerrada por la IA → selector de ánimo + guardar */
+            <div className="animate-fade-in space-y-3">
+              <p className="text-sm text-muted">¿Cómo terminaste hoy?</p>
+              <div className="grid grid-cols-4 gap-2">
+                {MOODS.map((mo) => (
+                  <button key={mo.key} onClick={() => setMood(mo.key)}
+                    className={`rounded-xl py-2.5 text-xs font-medium border transition-colors ${mood === mo.key ? 'border-jade bg-jade/10 text-neutral-100' : 'border-line bg-elevated text-neutral-400'}`}>
+                    {mo.label}
+                  </button>
+                ))}
+              </div>
+              <button className="btn-primary w-full" onClick={save}>
+                Guardar sesión
               </button>
             </div>
           ) : (
-            <div className="animate-fade-in space-y-4">
-              {/* Micro-tip: pregunta para llevar al tatami */}
-              {extracted?.matQuestion && (
-                <div className="rounded-2xl border border-jade/40 bg-jade/8 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2D9B6F" strokeWidth="2.5">
-                      <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01" strokeLinecap="round"/>
-                    </svg>
-                    <span className="text-[11px] uppercase tracking-widest text-jade font-medium">Llevá esto a la próxima clase</span>
-                  </div>
-                  <p className="text-[15px] text-neutral-100 leading-snug">{extracted.matQuestion}</p>
-                </div>
-              )}
-
-              <div>
-                <p className="text-sm text-muted mb-2">¿Cómo terminaste hoy?</p>
-                <div className="grid grid-cols-4 gap-2 mb-3">
-                  {MOODS.map((mo) => (
-                    <button
-                      key={mo.key}
-                      onClick={() => setMood(mo.key)}
-                      className={`rounded-xl py-2.5 text-xs font-medium border transition-colors ${
-                        mood === mo.key
-                          ? 'border-jade bg-jade/10 text-neutral-100'
-                          : 'border-line bg-elevated text-neutral-400'
-                      }`}
-                    >
-                      {mo.label}
-                    </button>
-                  ))}
-                </div>
-                <button className="btn-primary w-full" onClick={save}>
-                  Guardar sesión
+            /* Conversación abierta */
+            <>
+              <div className="flex items-end gap-2">
+                <textarea
+                  className="input-field resize-none max-h-32 py-3"
+                  rows={1}
+                  placeholder="Escribí tu respuesta…"
+                  value={input}
+                  disabled={closing}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+                  }}
+                />
+                <button
+                  className="btn-primary px-4 py-3 shrink-0"
+                  disabled={!input.trim() || loading || closing}
+                  onClick={send}
+                  aria-label="Enviar"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </button>
               </div>
-            </div>
+
+              {hasUserMessages && !closing && (
+                <button
+                  className="w-full py-2.5 text-sm font-medium text-neutral-400 border border-line rounded-xl active:bg-elevated transition-colors disabled:opacity-40"
+                  disabled={loading}
+                  onClick={triggerClose}
+                >
+                  Guardar sesión
+                </button>
+              )}
+            </>
           )}
+
         </div>
       </div>
     </div>
@@ -162,13 +176,11 @@ function Bubble({ role, text }) {
   const isUser = role === 'user';
   return (
     <div className={`flex animate-fade-in-fast ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div
-        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ${
-          isUser
-            ? 'bg-jade text-black rounded-br-md'
-            : 'bg-surface border border-line text-neutral-200 rounded-bl-md'
-        }`}
-      >
+      <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ${
+        isUser
+          ? 'bg-jade text-black rounded-br-md'
+          : 'bg-surface border border-line text-neutral-200 rounded-bl-md'
+      }`}>
         <RichText text={text} />
       </div>
     </div>

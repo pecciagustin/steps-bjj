@@ -5,7 +5,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'GROQ_API_KEY no está configurada en el entorno.' });
   }
 
-  const { messages = [], profile = {}, sessionsSummary = '', currentPhase = 'discovery' } = req.body || {};
+  const { messages = [], profile = {}, sessionsSummary = '', currentPhase = 'discovery', isClosing = false } = req.body || {};
 
   const sessionNumber = (profile.totalSessions || 0) + 1;
   const isDiscovery = currentPhase === 'discovery';
@@ -64,14 +64,22 @@ REGLAS DE CONVERSACIÓN:
 - Español rioplatense, casual y cálido (vos, tenés, contame).
 - UNA sola pregunta por turno.
 - Respuestas cortas (2-4 frases). Concreto y accionable.
-- Máximo 2 focos por sesión.
-- La conversación dura como mucho 4-5 intercambios. Cuando tengas suficiente, cerrá con: 1 insight breve + 1 o 2 focos para la próxima clase.
 - Nunca des una corrección técnica como verdad absoluta; sugerí validarla con el profesor.
+- Seguí la conversación con preguntas de seguimiento. NO cerrés la sesión vos — el usuario decide cuándo guardar.
+- NO incluyas el bloque <session_data> hasta que recibas la instrucción de cierre.
 
-Cuando estés CERRANDO la sesión (último mensaje), agregá al final un bloque de datos estructurados (el frontend lo oculta automáticamente). Completá los campos con lo que extrajiste de la charla. styleSignal/styleHypothesis/styleConfidence solo si la fase lo permite (en discovery dejalos null/0). matQuestion solo en discovery:
+${isClosing ? `
+INSTRUCCIÓN DE CIERRE (el usuario eligió guardar ahora):
+Generá el mensaje final de esta sesión con:
+1. Un insight genuino basado en todo lo que se habló hoy.
+2. El tip accionable con el formato "Estos consejos solo van a mejorar... pero por lo que me contaste hasta acá: [observación] — la próxima clase probá [acción concreta]." (solo si hay sesiones previas).
+3. 1-2 focos específicos para la próxima clase.
+4. La matQuestion (solo en discovery).
+5. Al final, el bloque session_data completo:
 <session_data>
 {"techniques":[],"struggles":[],"wins":[],"focusNext":[],"matQuestion":null,"styleSignal":null,"styleHypothesis":null,"styleConfidence":0,"mood":"normal"}
-</session_data>`;
+</session_data>
+` : ''}`;
 
   try {
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {

@@ -56,12 +56,12 @@ export function splitSessionData(text) {
   return { visible, extracted };
 }
 
-export async function sendChat({ messages, profile, sessionsSummary, currentPhase }) {
+export async function sendChat({ messages, profile, sessionsSummary, currentPhase, isClosing = false }) {
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages, profile, sessionsSummary, currentPhase }),
+      body: JSON.stringify({ messages, profile, sessionsSummary, currentPhase, isClosing }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
