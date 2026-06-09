@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-ink text-neutral-200 font-body antialiased;
+    overscroll-behavior-y: none;
+  }
+
+  /* Number/title spacing tweak for Bebas Neue */
+  .font-display {
+    letter-spacing: 0.02em;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-jade text-black font-semibold rounded-xl px-5 py-3.5 text-base
+      transition-colors active:bg-jade-dim disabled:opacity-40 disabled:pointer-events-none;
+  }
+
+  .btn-secondary {
+    @apply bg-elevated text-neutral-200 font-medium rounded-xl px-5 py-3.5 text-base
+      border border-line transition-colors active:bg-surface disabled:opacity-40;
+  }
+
+  .card {
+    @apply bg-surface border border-line rounded-2xl;
+  }
+
+  .input-field {
+    @apply w-full bg-elevated border border-line rounded-xl px-4 py-3.5 text-base
+      text-neutral-100 placeholder:text-muted focus:outline-none focus:border-jade transition-colors;
+  }
+}
+
+/* Hide scrollbars on mobile chat while keeping scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
